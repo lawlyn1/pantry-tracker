@@ -15,68 +15,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
     
-    // Use pdf2json for Node.js-compatible PDF parsing
-    const PDFParser = (await import('pdf2json')).default;
+    // Use pdfjs-dist on server-side without worker
+    const pdfjsLib = await import('pdfjs-dist');
+    const pdf = await pdfjsLib.getDocument({ 
+      data: arrayBuffer,
+      useWorkerFetch: false,
+    }).promise;
     
-    const text = await Promise.race([
-      new Promise<string>((resolve, reject) => {
-        const pdfParser = new PDFParser();
-        
-        const timeout = setTimeout(() => {
-          pdfParser.destroy();
-          reject(new Error('PDF parsing timeout (30s)'));
-        }, 30000);
-        
-        pdfParser.on('pdfParser_dataError', (errData: any) => {
-          clearTimeout(timeout);
-          console.error('PDF parse error:', errData);
-          reject(new Error(errData.parserError || 'Failed to parse PDF'));
-        });
-        
-        pdfParser.on('pdfParser_dataReady', (pdfData: any) => {
-          clearTimeout(timeout);
-          let fullText = '';
-          
-          if (pdfData.Pages) {
-            for (const page of pdfData.Pages) {
-              if (page.Texts) {
-                for (const textItem of page.Texts) {
-                  if (textItem.R) {
-                    for (const r of textItem.R) {
-                      fullText += r.T + ' ';
-                    }
-                  }
-                }
-              }
-              fullText += '\n';
-            }
-          }
-          
-          if (!fullText || fullText.trim().length === 0) {
-            reject(new Error('No text found in PDF'));
-            return;
-          }
-          
-          // Decode URL-encoded text
-          try {
-            fullText = decodeURIComponent(fullText);
-          } catch {
-            // If decoding fails, use as-is
-          }
-          
-          resolve(fullText);
-        });
-        
-        pdfParser.parseBuffer(buffer);
-      }),
-      new Promise<string>((_, reject) => 
-        setTimeout(() => reject(new Error('PDF parsing timeout (30s)')), 30000)
-      ),
-    ]);
+    let fullText = '';
     
-    return NextResponse.json({ text });
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map((item: any) => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+    
+    if (!fullText || fullText.trim().length === 0) {
+      return NextResponse.json({ error: 'No text found in PDF' }, { status: 400 });
+    }
+    
+    return NextResponse.json({ text: fullText });
   } catch (error: any) {
     console.error('PDF parse error:', error);
     return NextResponse.json(
