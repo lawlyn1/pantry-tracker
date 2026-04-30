@@ -26,7 +26,17 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processText = useCallback((text: string) => {
+    console.log('=== RAW TEXT FOR PARSING ===');
+    console.log(text);
+    console.log('=== END ===');
     const parsed = parseReceiptText(text);
+    if (parsed.length === 0) {
+      // Show extracted text in textarea so user can see what was extracted
+      setRawText(text);
+      setMode('text');
+      setError(`No items auto-detected. We've put the extracted text in the box below — you can edit it then click "Parse Text" to try again.`);
+      return;
+    }
     const review: ReviewItem[] = parsed.map(item => ({
       ...item,
       expiration_date: estimateExpiryDate(item.name),
@@ -94,8 +104,8 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
       const rows = toSave.map(item => ({
         user_id: user?.id,
         name: item.name,
-        quantity: item.quantity,
-        unit: item.unit,
+        quantity: item.qty,
+        unit: item.category === 'Other' ? 'pcs' : item.category.toLowerCase(),
         expiration_date: item.expiration_date,
       }));
       const { error } = await supabase.from('ingredients').insert(rows);
@@ -168,20 +178,14 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
                         type="number"
                         min="0"
                         step="0.01"
-                        value={item.quantity}
-                        onChange={e => updateItem(index, 'quantity', parseFloat(e.target.value) || 1)}
+                        value={item.qty}
+                        onChange={e => updateItem(index, 'qty', parseFloat(e.target.value) || 1)}
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500">Unit</label>
-                      <select
-                        value={item.unit}
-                        onChange={e => updateItem(index, 'unit', e.target.value)}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                      >
-                        {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
+                      <label className="text-xs text-gray-500">Category</label>
+                      <span className="block px-2 py-1 text-sm text-gray-600">{item.category}</span>
                     </div>
                     <div>
                       <label className="text-xs text-gray-500 flex items-center gap-1">

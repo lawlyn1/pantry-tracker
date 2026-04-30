@@ -1,104 +1,131 @@
 export interface ParsedReceiptItem {
+  id: string;
   name: string;
-  quantity: number;
-  unit: string;
-  price?: number;
+  qty: number;
+  category: string;
+  unitPrice?: number;
+  totalPrice?: number;
   rawText: string;
 }
 
-const SKIP_KEYWORDS = [
-  'total', 'subtotal', 'vat', 'change', 'cash', 'card', 'visa', 'mastercard',
-  'thank', 'welcome', 'store', 'receipt', 'date', 'time', 'till', 'operator',
-  'clubcard', 'loyalty', 'points', 'savings', 'discount', 'offer', 'deal',
-  'member', 'price', 'each', 'item', 'qty', 'barcode', 'tel:', 'www.',
-  'aldi', 'tesco', 'sainsbury', 'asda', 'morrisons', 'lidl', 'waitrose',
-  'address', 'street', 'road', 'postcode', 'telephone', 'opening',
-  '£', 'balance', 'approved', 'auth', 'ref:', 'transaction', 'terminal',
-  'basket', 'offers', 'paid', 'order', 'delivery', 'track', 'update',
-  'payment', 'card ending', 'expiry', 'substitutions', 'unavailable',
-  'shorter life', 'use by', 'best before', 'fridge', 'freezer', 'cupboard',
-  'was', 'now', 'minimum', 'charge', 'refund', 'difference', 'removed',
-  'this is not a vat receipt', 'keep this receipt', 'electrical products',
-  'non prescription medicines', 'groceries homepage', 'help centre',
-  'contact us', 'pricing policy', 'company number', 'registered',
-  'vat registration', 'neither tesco stores', 'read our privacy',
-  'cookies policy', 'report suspicious', 'sent from my iphone',
-  'begin forwarded message', 'from:', 'to:', 'subject:', 'date:',
+const EXCLUDE_PATTERNS = [
+  /iCloud Mail/i,
+  /Was\s*£/i,
+  /Clubcard Price/i,
+  /Substituted with/i,
+  /https:\/\/www\.icloud\.com\/mail/i,
+  /\d{2}\/\d{2}\/\d{4},?\s*\d{1,2}:\d{2}/,
+  /Page \d+\/\d+/i,
+  /Payment summary/i,
+  /Basket value/i,
+  /Total basket/i,
+  /Min basket charge/i,
+  /Refund/i,
+  /Any \d+ for £/i,
 ];
 
 const NON_FOOD_KEYWORDS = [
   'bag', 'carrier', 'plastic', 'paper', 'magazine', 'lottery', 'ticket',
   'battery', 'batteries', 'cleaning', 'detergent', 'washing', 'bleach',
   'toilet', 'tissue', 'kitchen roll', 'bin bag', 'foil', 'cling',
+  'dishcloth', 'port', 'wine', 'madeira', 'chardonnay', 'merlot',
 ];
 
+const CATEGORY_MAP: Record<string, string> = {
+  'sausage': 'Meat', 'bacon': 'Meat', 'pork': 'Meat', 'beef': 'Meat',
+  'chicken': 'Meat', 'salmon': 'Fish', 'prawns': 'Fish', 'fish': 'Fish',
+  'milk': 'Dairy', 'cream': 'Dairy', 'cheese': 'Dairy', 'yogurt': 'Dairy', 'yoghurt': 'Dairy', 'eggs': 'Dairy',
+  'butter': 'Dairy',
+  'spinach': 'Vegetables', 'broccoli': 'Vegetables', 'asparagus': 'Vegetables', 'leeks': 'Vegetables',
+  'peas': 'Vegetables', 'mushrooms': 'Vegetables', 'cauliflower': 'Vegetables',
+  'onions': 'Vegetables', 'garlic': 'Vegetables', 'parsnips': 'Vegetables', 'squash': 'Vegetables',
+  'carrots': 'Vegetables', 'tomatoes': 'Vegetables', 'potatoes': 'Vegetables',
+  'strawberries': 'Fruit', 'raspberries': 'Fruit', 'blueberries': 'Fruit', 'blackberries': 'Fruit',
+  'grapes': 'Fruit', 'lemons': 'Fruit', 'mango': 'Fruit',
+  'bread': 'Bakery', 'loaf': 'Bakery', 'rolls': 'Bakery', 'buns': 'Bakery',
+  'puff pastry': 'Bakery', 'shortcrust': 'Bakery', 'meringue': 'Bakery',
+  'ice cream': 'Frozen', 'frozen': 'Frozen',
+  'beans': 'Cupboard', 'tuna': 'Cupboard', 'soup': 'Cupboard',
+  'water': 'Drinks', 'juice': 'Drinks',
+};
+
+function generateId(): string {
+  return Math.random().toString(36).substring(2, 9);
+}
+
+function detectCategory(name: string): string {
+  const lower = name.toLowerCase();
+  for (const [keyword, category] of Object.entries(CATEGORY_MAP)) {
+    if (lower.includes(keyword)) return category;
+  }
+  return 'Other';
+}
+
+function normalisePrice(priceStr: string): number {
+  // Handle OCR issues: "£2 00" -> "£2.00"
+  const cleaned = priceStr.replace(/[£\s]/g, '').replace(/(\d+)\s+(\d{2})/, '$1.$2');
+  return parseFloat(cleaned);
+}
+
+function shouldExclude(text: string): boolean {
+  return EXCLUDE_PATTERNS.some(pattern => pattern.test(text));
+}
+
 export function parseReceiptText(rawText: string): ParsedReceiptItem[] {
-  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+  // Pre-process: normalise OCR artifacts
+  let text = rawText
+    .replace(/[†‡]/g, '')
+    .replace(/(\d+)\s+(\d{2})(?=\s*£|\s*\d)/g, '$1.$2') // Fix "2 00" -> "2.00"
+    .replace(/\s+/g, ' ')
+    .trim();
+
   const items: ParsedReceiptItem[] = [];
+  const seen = new Set<string>();
 
-  for (const line of lines) {
-    // Skip lines with keywords we don't care about
-    const lower = line.toLowerCase();
-    if (SKIP_KEYWORDS.some(kw => lower.includes(kw))) continue;
-    if (NON_FOOD_KEYWORDS.some(kw => lower.includes(kw))) continue;
+  // Primary pattern: Qty Name £UnitPrice £TotalPrice
+  // Handles: "4 Tesco Finest 6 Cumberland Pork Sausages 400g £3.00 £9.81"
+  const itemRegex = /(\d{1,3})\s+((?:[A-Z][a-z]*(?:\s+\d*[A-Za-z]+)*\s*){2,20}?)£?([\d\s\.]+)\s*£([\d\s\.]+)/gi;
 
-    // Skip lines that are purely numbers, prices, or very short
-    if (/^[\d\s£€$.,\-*]+$/.test(line)) continue;
-    if (line.length < 5) continue;
+  let match;
+  while ((match = itemRegex.exec(text)) !== null) {
+    const rawMatch = match[0];
+    
+    // Skip excluded patterns
+    if (shouldExclude(rawMatch)) continue;
 
-    // Must have a quantity at the start to be a valid item
-    const qtyMatch = line.match(/^(\d+)\s+(.+)/);
-    if (!qtyMatch) continue;
+    const qty = parseInt(match[1], 10);
+    let name = match[2].trim();
+    const unitPriceStr = match[3];
+    const totalPriceStr = match[4];
 
-    const quantity = parseInt(qtyMatch[1]);
-    let name = qtyMatch[2];
+    // Clean up name
+    name = name
+      .replace(/\s+/g, ' ')
+      .replace(/^(Fridge|Freezer|Cupboard|Grocery)\s+/i, '')
+      .trim();
 
-    // Skip if name is too short or looks like garbage
-    if (name.length < 3) continue;
-    if (/^\d+$/.test(name)) continue;
-    if (/^[a-z]+\s+[a-z]+\s+[a-z]+$/i.test(name) && !/\d/.test(name)) {
-      // Skip lines that look like random words with no numbers (addresses, names, etc.)
-      continue;
-    }
+    // Skip if name looks like metadata
+    if (name.length < 3 || /^\d+$/.test(name)) continue;
+    if (NON_FOOD_KEYWORDS.some(kw => name.toLowerCase().includes(kw))) continue;
 
-    // Try to extract prices at end (Tesco has Unit Price and Total)
-    const priceMatch = line.match(/(\d+\.\d{2})\s*$/);
-    const price = priceMatch ? parseFloat(priceMatch[1]) : undefined;
+    const unitPrice = normalisePrice(unitPriceStr);
+    const totalPrice = normalisePrice(totalPriceStr);
 
-    // Remove all prices from name (Tesco has two prices at end)
-    name = name.replace(/\s+\d+\.\d{2}\s*$/g, '').trim();
-    name = name.replace(/\s+£\s*/g, ' ').trim();
-    name = name.replace(/\s*\*\s*$/, '').trim();
-
-    // Skip if name is too short after cleanup
-    if (name.length < 3) continue;
-
-    // Detect unit from name (Tesco includes weight in product name)
-    let unit = 'pcs';
-    const unitMatch = name.match(/(\d+(?:\.\d+)?)\s*(g|kg|ml|l|cl|ltr|each|pack)\b/i);
-    if (unitMatch) {
-      unit = unitMatch[2].toLowerCase();
-      if (unit === 'ltr') unit = 'l';
-      if (unit === 'each') unit = 'pcs';
-      if (unit === 'pack') unit = 'pcs';
-    }
+    // Dedupe by name + qty
+    const key = `${name.toLowerCase()}|${qty}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
 
     items.push({
-      name: capitalise(name),
-      quantity,
-      unit,
-      price,
-      rawText: line,
+      id: generateId(),
+      name: name.replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()),
+      qty,
+      category: detectCategory(name),
+      unitPrice,
+      totalPrice,
+      rawText: rawMatch.trim(),
     });
   }
 
   return items;
-}
-
-function capitalise(str: string): string {
-  return str
-    .toLowerCase()
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
 }
