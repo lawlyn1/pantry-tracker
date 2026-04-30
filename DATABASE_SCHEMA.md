@@ -7,14 +7,14 @@ CREATE TABLE ingredients (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  quantity NUMERIC NOT NULL DEFAULT 1,
+  quantity NUMERIC NOT NULL DEFAULT 1 CHECK (quantity >= 0),
   unit TEXT NOT NULL DEFAULT 'pcs',
-  expiration_date DATE NOT NULL,
-  calories_per_100g NUMERIC,
-  protein_per_100g NUMERIC,
-  carbs_per_100g NUMERIC,
-  fat_per_100g NUMERIC,
-  fibre_per_100g NUMERIC,
+  expiration_date DATE NOT NULL CHECK (expiration_date >= CURRENT_DATE),
+  calories_per_100g NUMERIC CHECK (calories_per_100g >= 0),
+  protein_per_100g NUMERIC CHECK (protein_per_100g >= 0),
+  carbs_per_100g NUMERIC CHECK (carbs_per_100g >= 0),
+  fat_per_100g NUMERIC CHECK (fat_per_100g >= 0),
+  fibre_per_100g NUMERIC CHECK (fibre_per_100g >= 0),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -40,11 +40,25 @@ CREATE POLICY "Users can delete their own ingredients" ON ingredients
   FOR DELETE
   USING (auth.uid() = user_id);
 
--- Create index on expiration date for easy querying of expiring items
+-- Create indexes for performance
+CREATE INDEX idx_ingredients_user_id ON ingredients(user_id); -- Critical for RLS
 CREATE INDEX idx_ingredients_expiration_date ON ingredients(expiration_date);
-
--- Create index on name for search
 CREATE INDEX idx_ingredients_name ON ingredients(name);
+CREATE INDEX idx_ingredients_user_expiration ON ingredients(user_id, expiration_date); -- Composite for user's expiring items
+
+-- Create trigger for updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_ingredients_updated_at
+    BEFORE UPDATE ON ingredients
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 ```
 
 ## Table: food_logs
@@ -55,10 +69,10 @@ CREATE TABLE food_logs (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   ingredient_id UUID REFERENCES ingredients(id) ON DELETE CASCADE,
   ingredient_name TEXT NOT NULL,
-  quantity_consumed NUMERIC NOT NULL,
+  quantity_consumed NUMERIC NOT NULL CHECK (quantity_consumed > 0),
   unit TEXT NOT NULL,
-  log_date DATE NOT NULL,
-  meal_type TEXT, -- breakfast, lunch, dinner, snack
+  log_date DATE NOT NULL CHECK (log_date <= CURRENT_DATE),
+  meal_type TEXT CHECK (meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -78,11 +92,12 @@ CREATE POLICY "Users can delete their own food logs" ON food_logs
   FOR DELETE
   USING (auth.uid() = user_id);
 
--- Create index on log date for querying recent logs
+-- Create indexes for performance
+CREATE INDEX idx_food_logs_user_id ON food_logs(user_id); -- Critical for RLS
 CREATE INDEX idx_food_logs_log_date ON food_logs(log_date);
-
--- Create index on ingredient_id for fast lookups
 CREATE INDEX idx_food_logs_ingredient_id ON food_logs(ingredient_id);
+CREATE INDEX idx_food_logs_user_date ON food_logs(user_id, log_date); -- Composite for user's recent logs
+CREATE INDEX idx_food_logs_user_ingredient ON food_logs(user_id, ingredient_id); -- Composite for user's ingredient consumption
 ```
 
 ## CSV Import Format (MacroFactor Export Simulation)

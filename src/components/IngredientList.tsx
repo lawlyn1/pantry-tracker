@@ -8,10 +8,12 @@ export default function IngredientList({
   ingredients,
   loading,
   onIngredientDeleted,
+  showMacros = true,
 }: {
   ingredients: Ingredient[];
   loading: boolean;
   onIngredientDeleted: () => void;
+  showMacros?: boolean;
 }) {
   const handleDelete = async (id: string) => {
     try {
@@ -89,6 +91,25 @@ export default function IngredientList({
                     Exp: {new Date(ingredient.expiration_date).toLocaleDateString()}
                   </span>
                 </div>
+                {showMacros && (ingredient.calories_per_100g || ingredient.protein_per_100g) && (
+                  <div className="flex gap-3 mt-1">
+                    {ingredient.calories_per_100g != null && (
+                      <span className="text-xs text-gray-400">{ingredient.calories_per_100g} kcal</span>
+                    )}
+                    {ingredient.protein_per_100g != null && (
+                      <span className="text-xs text-gray-400">P: {ingredient.protein_per_100g}g</span>
+                    )}
+                    {ingredient.carbs_per_100g != null && (
+                      <span className="text-xs text-gray-400">C: {ingredient.carbs_per_100g}g</span>
+                    )}
+                    {ingredient.fat_per_100g != null && (
+                      <span className="text-xs text-gray-400">F: {ingredient.fat_per_100g}g</span>
+                    )}
+                    {ingredient.fibre_per_100g != null && (
+                      <span className="text-xs text-gray-400">Fi: {ingredient.fibre_per_100g}g</span>
+                    )}
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => handleDelete(ingredient.id)}

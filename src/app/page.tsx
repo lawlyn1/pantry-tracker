@@ -8,15 +8,32 @@ import IngredientList from '@/components/IngredientList';
 import RecipeSuggestions from '@/components/RecipeSuggestions';
 import FoodLog from '@/components/FoodLog';
 import Auth from '@/components/Auth';
-import type { Ingredient, TabType, CSVIngredient } from '@/types';
+import ReceiptImport from '@/components/ReceiptImport';
+import type { Ingredient, CSVIngredient } from '@/types';
 import type { User } from '@supabase/supabase-js';
+
+type TabType = 'inventory' | 'recipes' | 'foodlog' | 'receipt';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'inventory' | 'recipes' | 'foodlog'>('inventory');
+  const [activeTab, setActiveTab] = useState<TabType>('inventory');
   const [error, setError] = useState<string>('');
+  const [showMacros, setShowMacros] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('showMacros') !== 'false';
+    }
+    return true;
+  });
+
+  const toggleMacros = () => {
+    setShowMacros(prev => {
+      const next = !prev;
+      localStorage.setItem('showMacros', String(next));
+      return next;
+    });
+  };
 
   useEffect(() => {
     // Check for existing session
@@ -89,12 +106,23 @@ export default function Home() {
               <h1 className="text-4xl font-bold text-gray-800 mb-2">🥫 Pantry Tracker</h1>
               <p className="text-gray-600">Track your inventory and discover recipes</p>
             </div>
-            <button
-              onClick={handleSignOut}
-              className="px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Sign Out
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleMacros}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  showMacros ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-gray-500'
+                }`}
+                title="Toggle macro details"
+              >
+                {showMacros ? '📊 Macros On' : '📊 Macros Off'}
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
           </header>
 
           {error && (
@@ -105,37 +133,25 @@ export default function Home() {
           )}
 
         <div className="mb-6">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setActiveTab('inventory')}
-              className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === 'inventory'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              Inventory
-            </button>
-            <button
-              onClick={() => setActiveTab('foodlog')}
-              className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === 'foodlog'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              Food Log
-            </button>
-            <button
-              onClick={() => setActiveTab('recipes')}
-              className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                activeTab === 'recipes'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              Recipe Suggestions
-            </button>
+          <div className="flex flex-wrap gap-2">
+            {([
+              { key: 'inventory', label: 'Inventory' },
+              { key: 'receipt', label: '🧾 Import Receipt' },
+              { key: 'foodlog', label: 'Food Log' },
+              { key: 'recipes', label: 'Recipes' },
+            ] as { key: TabType; label: string }[]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                  activeTab === tab.key
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -150,9 +166,12 @@ export default function Home() {
                 ingredients={ingredients}
                 loading={loading}
                 onIngredientDeleted={handleIngredientDeleted}
+                showMacros={showMacros}
               />
             </div>
           </div>
+        ) : activeTab === 'receipt' ? (
+          <ReceiptImport onImport={fetchIngredients} user={user} />
         ) : activeTab === 'foodlog' ? (
           <FoodLog onConsumption={fetchIngredients} user={user} />
         ) : (
