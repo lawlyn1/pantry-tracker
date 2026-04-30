@@ -292,7 +292,7 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
                 </p>
                 <p className="text-gray-400 text-sm mt-1">Click to browse or drag & drop</p>
                 {mode === 'photo' && (
-                  <p className="text-xs text-gray-400 mt-2">Works best with clear, well-lit photos. Supports Aldi, Tesco, Sainsbury's, etc.</p>
+                  <p className="text-xs text-gray-400 mt-2">Works best with clear, well-lit photos. Supports Aldi, Tesco, Sainsbury&apos;s, etc.</p>
                 )}
               </>
             )}

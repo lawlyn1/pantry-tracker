@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { searchRecipesByIngredients, getRecipeInformation } from '@/lib/spoonacular';
 import type { Recipe, MacroTargets, Ingredient } from '@/types';
 
@@ -197,7 +198,9 @@ export default function RecipeSuggestions({ ingredients }: { ingredients: Ingred
             </button>
           </div>
           {selectedRecipe.image && (
-            <img src={selectedRecipe.image} alt={selectedRecipe.title} className="w-full h-48 object-cover rounded-lg mb-4" />
+            <div className="relative w-full h-48 mb-4">
+              <Image src={selectedRecipe.image} alt={selectedRecipe.title} fill className="object-cover rounded-lg" unoptimized />
+            </div>
           )}
           {selectedRecipe.nutrition && (
             <div className="grid grid-cols-4 gap-4 mb-4">
@@ -239,7 +242,9 @@ export default function RecipeSuggestions({ ingredients }: { ingredients: Ingred
                 className="cursor-pointer bg-gray-50 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
               >
                 {recipe.image && (
-                  <img src={recipe.image} alt={recipe.title} className="w-full h-32 object-cover" />
+                  <div className="relative w-full h-32">
+                    <Image src={recipe.image} alt={recipe.title} fill className="object-cover" unoptimized />
+                  </div>
                 )}
                 <div className="p-4">
                   <h4 className="font-medium text-gray-800 mb-2 line-clamp-2">{recipe.title}</h4>
