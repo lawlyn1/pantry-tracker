@@ -14,6 +14,16 @@ const SKIP_KEYWORDS = [
   'aldi', 'tesco', 'sainsbury', 'asda', 'morrisons', 'lidl', 'waitrose',
   'address', 'street', 'road', 'postcode', 'telephone', 'opening',
   '£', 'balance', 'approved', 'auth', 'ref:', 'transaction', 'terminal',
+  'basket', 'offers', 'paid', 'order', 'delivery', 'track', 'update',
+  'payment', 'card ending', 'expiry', 'substitutions', 'unavailable',
+  'shorter life', 'use by', 'best before', 'fridge', 'freezer', 'cupboard',
+  'was', 'now', 'minimum', 'charge', 'refund', 'difference', 'removed',
+  'this is not a vat receipt', 'keep this receipt', 'electrical products',
+  'non prescription medicines', 'groceries homepage', 'help centre',
+  'contact us', 'pricing policy', 'company number', 'registered',
+  'vat registration', 'neither tesco stores', 'read our privacy',
+  'cookies policy', 'report suspicious', 'sent from my iphone',
+  'begin forwarded message', 'from:', 'to:', 'subject:', 'date:',
 ];
 
 const NON_FOOD_KEYWORDS = [
@@ -36,12 +46,9 @@ export function parseReceiptText(rawText: string): ParsedReceiptItem[] {
     if (/^[\d\s£€$.,\-*]+$/.test(line)) continue;
     if (line.length < 3) continue;
 
-    // Try to extract a price at end of line (e.g. "Chicken Breast 3.49")
-    const priceMatch = line.match(/(\d+\.\d{2})\s*[A-Z]?\s*$/);
-    const price = priceMatch ? parseFloat(priceMatch[1]) : undefined;
-
-    // Try to extract quantity at start (e.g. "2x Bananas" or "2 Bananas")
-    const qtyMatch = line.match(/^(\d+)\s*[xX]?\s+(.+)/);
+    // Tesco format: Qty at start, then product, then prices
+    // e.g., "4 Tesco Finest 6 Cumberland Pork Sausages 400g £3.00 £9.81"
+    const qtyMatch = line.match(/^(\d+)\s+(.+)/);
     let quantity = 1;
     let name = line;
 
@@ -50,19 +57,27 @@ export function parseReceiptText(rawText: string): ParsedReceiptItem[] {
       name = qtyMatch[2];
     }
 
-    // Remove price from name
-    name = name.replace(/\s+\d+\.\d{2}\s*[A-Z]?\s*$/, '').trim();
-    name = name.replace(/\s+\*\s*$/, '').trim();
+    // Try to extract prices at end (Tesco has Unit Price and Total)
+    const priceMatch = line.match(/(\d+\.\d{2})\s*$/);
+    const price = priceMatch ? parseFloat(priceMatch[1]) : undefined;
+
+    // Remove all prices from name (Tesco has two prices at end)
+    name = name.replace(/\s+\d+\.\d{2}\s*$/g, '').trim();
+    name = name.replace(/\s+£\s*/g, ' ').trim();
+    name = name.replace(/\s*\*\s*$/, '').trim();
 
     // Skip if name is too short or still looks like a number
     if (name.length < 3) continue;
     if (/^\d+$/.test(name)) continue;
 
-    // Detect unit from name
+    // Detect unit from name (Tesco includes weight in product name)
     let unit = 'pcs';
-    const unitMatch = name.match(/(\d+(?:\.\d+)?)\s*(g|kg|ml|l|cl)\b/i);
+    const unitMatch = name.match(/(\d+(?:\.\d+)?)\s*(g|kg|ml|l|cl|ltr|each|pack)\b/i);
     if (unitMatch) {
       unit = unitMatch[2].toLowerCase();
+      if (unit === 'ltr') unit = 'l';
+      if (unit === 'each') unit = 'pcs';
+      if (unit === 'pack') unit = 'pcs';
     }
 
     items.push({
