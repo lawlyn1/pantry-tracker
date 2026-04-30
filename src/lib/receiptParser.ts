@@ -36,6 +36,23 @@ export function parseReceiptText(rawText: string): ParsedReceiptItem[] {
   const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
   const items: ParsedReceiptItem[] = [];
 
+  // Food-related keywords that indicate a real product
+  const FOOD_KEYWORDS = [
+    'chicken', 'beef', 'pork', 'lamb', 'bacon', 'sausage', 'ham', 'turkey', 'salmon', 'fish', 'prawns',
+    'milk', 'cream', 'butter', 'cheese', 'yogurt', 'eggs',
+    'apple', 'banana', 'strawberr', 'berr', 'tomato', 'lettuce', 'salad', 'carrot', 'potato', 'onion',
+    'garlic', 'broccoli', 'spinach', 'pepper', 'cucumber', 'avocado', 'lemon', 'orange', 'grape',
+    'mushroom', 'courgette', 'celery', 'asparagus', 'beans', 'peas', 'sprout',
+    'bread', 'loaf', 'roll', 'bagel', 'wrap', 'tortilla', 'pitta', 'croissant',
+    'pasta', 'rice', 'flour', 'sugar', 'oat', 'cereal', 'noodle', 'lentil', 'bean', 'chickpea',
+    'tin', 'can', 'tuna', 'soup',
+    'sauce', 'ketchup', 'mayo', 'mustard', 'oil', 'vinegar', 'soy',
+    'water', 'wine', 'beer', 'juice',
+    'ice cream', 'frozen',
+    'tesco', 'finest', 'simon howie', 'creamfields', 'oykos', 'tranos', 'yeo valley', 'mackie',
+    'hovis', 'warburtons', 'branston', 'nature', 'hardys', 'ice valley', 'blandy',
+  ];
+
   for (const line of lines) {
     // Skip lines with keywords we don't care about
     const lower = line.toLowerCase();
@@ -44,18 +61,18 @@ export function parseReceiptText(rawText: string): ParsedReceiptItem[] {
 
     // Skip lines that are purely numbers, prices, or very short
     if (/^[\d\s£€$.,\-*]+$/.test(line)) continue;
-    if (line.length < 3) continue;
+    if (line.length < 5) continue;
 
-    // Tesco format: Qty at start, then product, then prices
-    // e.g., "4 Tesco Finest 6 Cumberland Pork Sausages 400g £3.00 £9.81"
+    // Must have a quantity at the start to be a valid item
     const qtyMatch = line.match(/^(\d+)\s+(.+)/);
-    let quantity = 1;
-    let name = line;
+    if (!qtyMatch) continue;
 
-    if (qtyMatch) {
-      quantity = parseInt(qtyMatch[1]);
-      name = qtyMatch[2];
-    }
+    const quantity = parseInt(qtyMatch[1]);
+    let name = qtyMatch[2];
+
+    // Must contain at least one food keyword to be considered valid
+    const hasFoodKeyword = FOOD_KEYWORDS.some(kw => lower.includes(kw));
+    if (!hasFoodKeyword) continue;
 
     // Try to extract prices at end (Tesco has Unit Price and Total)
     const priceMatch = line.match(/(\d+\.\d{2})\s*$/);
@@ -66,9 +83,8 @@ export function parseReceiptText(rawText: string): ParsedReceiptItem[] {
     name = name.replace(/\s+£\s*/g, ' ').trim();
     name = name.replace(/\s*\*\s*$/, '').trim();
 
-    // Skip if name is too short or still looks like a number
-    if (name.length < 3) continue;
-    if (/^\d+$/.test(name)) continue;
+    // Skip if name is too short
+    if (name.length < 5) continue;
 
     // Detect unit from name (Tesco includes weight in product name)
     let unit = 'pcs';
