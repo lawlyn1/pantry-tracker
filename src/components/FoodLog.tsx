@@ -4,26 +4,11 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import FoodLogCSVUpload from '@/components/FoodLogCSVUpload';
 import type { User } from '@supabase/supabase-js';
-
-interface FoodLog {
-  id: string;
-  ingredient_id: string | null;
-  ingredient_name: string;
-  quantity_consumed: number;
-  unit: string;
-  log_date: string;
-  meal_type: string | null;
-}
-
-interface Ingredient {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-}
+import type { FoodLog, SimpleIngredient } from '@/types';
+import { UNIT_OPTIONS, MEAL_TYPES } from '@/types';
 
 export default function FoodLog({ onConsumption, user }: { onConsumption: () => void; user: User | null }) {
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [ingredients, setIngredients] = useState<SimpleIngredient[]>([]);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [selectedIngredient, setSelectedIngredient] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -161,16 +146,9 @@ export default function FoodLog({ onConsumption, user }: { onConsumption: () => 
                   onChange={(e) => setUnit(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="g">g</option>
-                  <option value="kg">kg</option>
-                  <option value="ml">ml</option>
-                  <option value="l">l</option>
-                  <option value="pcs">pcs</option>
-                  <option value="cups">cups</option>
-                  <option value="tbsp">tbsp</option>
-                  <option value="tsp">tsp</option>
-                  <option value="oz">oz</option>
-                  <option value="lb">lb</option>
+                  {UNIT_OPTIONS.map((unit) => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -193,10 +171,9 @@ export default function FoodLog({ onConsumption, user }: { onConsumption: () => 
                   onChange={(e) => setMealType(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="breakfast">Breakfast</option>
-                  <option value="lunch">Lunch</option>
-                  <option value="dinner">Dinner</option>
-                  <option value="snack">Snack</option>
+                  {MEAL_TYPES.map((meal) => (
+                    <option key={meal} value={meal}>{meal.charAt(0).toUpperCase() + meal.slice(1)}</option>
+                  ))}
                 </select>
               </div>
             </div>

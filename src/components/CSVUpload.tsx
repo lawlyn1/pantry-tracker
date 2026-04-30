@@ -4,8 +4,9 @@ import { useState, useRef } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import type { CSVIngredient } from '@/types';
 
-export default function CSVUpload({ onUpload, user }: { onUpload: (ingredients: any[]) => void; user: User | null }) {
+export default function CSVUpload({ onUpload, user }: { onUpload: () => void; user: User | null }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -52,7 +53,7 @@ export default function CSVUpload({ onUpload, user }: { onUpload: (ingredients: 
           if (error) throw error;
 
           setSuccess(`Successfully imported ${validIngredients.length} ingredients`);
-          onUpload(validIngredients);
+          onUpload();
           
           // Reset file input
           if (fileInputRef.current) {

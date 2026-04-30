@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getIngredientNutrition } from '@/lib/spoonacular';
 import type { User } from '@supabase/supabase-js';
+import type { Ingredient, NutritionInfo } from '@/types';
+import { UNIT_OPTIONS } from '@/types';
 
 export default function AddIngredientForm({ onIngredientAdded, user }: { onIngredientAdded: () => void; user: User | null }) {
   const [formData, setFormData] = useState({
@@ -135,16 +137,9 @@ export default function AddIngredientForm({ onIngredientAdded, user }: { onIngre
               onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="pcs">pcs</option>
-              <option value="g">g</option>
-              <option value="kg">kg</option>
-              <option value="ml">ml</option>
-              <option value="l">l</option>
-              <option value="cups">cups</option>
-              <option value="tbsp">tbsp</option>
-              <option value="tsp">tsp</option>
-              <option value="oz">oz</option>
-              <option value="lb">lb</option>
+              {UNIT_OPTIONS.map((unit) => (
+                <option key={unit} value={unit}>{unit}</option>
+              ))}
             </select>
           </div>
         </div>

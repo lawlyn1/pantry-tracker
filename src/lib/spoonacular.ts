@@ -1,49 +1,7 @@
+import type { NutritionInfo, Recipe, MacroTargets } from '@/types';
+
 const SPOONACULAR_API_KEY = process.env.SPOONACULAR_API_KEY || '';
 const SPOONACULAR_BASE_URL = 'https://api.spoonacular.com';
-
-export interface MacroTargets {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
-
-export interface Ingredient {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-  expiration_date: string;
-  calories_per_100g?: number;
-  protein_per_100g?: number;
-  carbs_per_100g?: number;
-  fat_per_100g?: number;
-  fibre_per_100g?: number;
-}
-
-export interface Recipe {
-  id: number;
-  title: string;
-  image: string;
-  usedIngredientCount: number;
-  missedIngredientCount: number;
-  likes: number;
-  readyInMinutes: number;
-  nutrition?: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  };
-}
-
-export interface NutritionInfo {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  fibre: number;
-}
 
 /**
  * Get nutrition information for an ingredient

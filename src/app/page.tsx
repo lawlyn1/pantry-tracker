@@ -8,7 +8,7 @@ import IngredientList from '@/components/IngredientList';
 import RecipeSuggestions from '@/components/RecipeSuggestions';
 import FoodLog from '@/components/FoodLog';
 import Auth from '@/components/Auth';
-import { Ingredient } from '@/lib/spoonacular';
+import type { Ingredient, TabType, CSVIngredient } from '@/types';
 import type { User } from '@supabase/supabase-js';
 
 export default function Home() {
@@ -74,8 +74,8 @@ export default function Home() {
     fetchIngredients();
   };
 
-  const handleCSVUpload = (uploadedIngredients: any[]) => {
-    setIngredients(prev => [...prev, ...uploadedIngredients]);
+  const handleCSVUpload = () => {
+    fetchIngredients();
   };
 
   return (

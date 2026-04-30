@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Ingredient } from '@/lib/spoonacular';
+import type { Ingredient } from '@/types';
 
 export default function IngredientList({
   ingredients,

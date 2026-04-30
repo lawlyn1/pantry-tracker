@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { searchRecipesByIngredients, getRecipeInformation, MacroTargets, Recipe } from '@/lib/spoonacular';
-import { Ingredient } from '@/lib/spoonacular';
+import { searchRecipesByIngredients, getRecipeInformation } from '@/lib/spoonacular';
+import type { Recipe, MacroTargets, Ingredient } from '@/types';
 
 export default function RecipeSuggestions({ ingredients }: { ingredients: Ingredient[] }) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);

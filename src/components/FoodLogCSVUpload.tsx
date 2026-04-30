@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import type { FoodLog } from '@/types';
 
 export default function FoodLogCSVUpload({ onUpload, user }: { onUpload: () => void; user: User | null }) {
   const [loading, setLoading] = useState(false);
@@ -27,7 +28,7 @@ export default function FoodLogCSVUpload({ onUpload, user }: { onUpload: () => v
           const foodLogs = results.data as any[];
           
           // Validate and transform data - MacroFactor food log format
-          const validLogs = foodLogs
+          const validLogs: Partial<FoodLog>[] = foodLogs
             .filter((item) => item.name && item.date && item.quantity)
             .map((item) => ({
               user_id: user?.id,
@@ -49,22 +50,24 @@ export default function FoodLogCSVUpload({ onUpload, user }: { onUpload: () => v
 
           // Auto-remove from inventory based on food logs
           for (const log of validLogs) {
-            // Find matching ingredient by name
-            const { data: ingredients } = await supabase
-              .from('ingredients')
-              .select('id, quantity, unit')
-              .ilike('name', `%${log.ingredient_name}%`)
-              .limit(1);
-
-            if (ingredients && ingredients.length > 0) {
-              const ingredient = ingredients[0];
-              // Convert units if needed (simplified - assumes same unit)
-              const newQuantity = Math.max(0, ingredient.quantity - log.quantity_consumed);
-              
-              await supabase
+            if (log.ingredient_name && log.quantity_consumed) {
+              // Find matching ingredient by name
+              const { data: ingredients } = await supabase
                 .from('ingredients')
-                .update({ quantity: newQuantity })
-                .eq('id', ingredient.id);
+                .select('id, quantity')
+                .ilike('name', `%${log.ingredient_name}%`)
+                .limit(1);
+
+              if (ingredients && ingredients.length > 0) {
+                const ingredient = ingredients[0];
+                // Convert units if needed (simplified - assumes same unit)
+                const newQuantity = Math.max(0, ingredient.quantity - log.quantity_consumed);
+                
+                await supabase
+                  .from('ingredients')
+                  .update({ quantity: newQuantity })
+                  .eq('id', ingredient.id);
+              }
             }
           }
 
