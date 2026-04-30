@@ -17,22 +17,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const arrayBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
 
-    const pdf = await getDocumentProxy(uint8Array);
-    const { text } = await extractText(pdf, { mergePages: true });
+    const result = await Promise.race([
+      (async () => {
+        const pdf = await getDocumentProxy(uint8Array);
+        const { text } = await extractText(pdf, { mergePages: true });
+        return { text };
+      })(),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('PDF parsing timed out (30s)')), 30000)
+      ),
+    ]);
 
-    if (!text || text.trim().length === 0) {
+    if (!result.text || result.text.trim().length === 0) {
       return NextResponse.json({ error: 'No text found in PDF' }, { status: 400 });
     }
 
-    console.log('=== EXTRACTED PDF TEXT ===');
-    console.log(text);
-    console.log('=== END ===');
-
-    return NextResponse.json({ text });
+    return NextResponse.json({ text: result.text });
   } catch (error: any) {
     console.error('PDF parse error:', error);
     return NextResponse.json(
-      { error: error?.message || 'Failed to parse PDF' },
+      { error: error?.message || 'Failed to parse PDF. Try pasting the text directly.' },
       { status: 500 }
     );
   }
