@@ -12,10 +12,10 @@ interface ReviewItem extends ParsedReceiptItem {
   include: boolean;
 }
 
-type InputMode = 'photo' | 'pdf' | 'text';
+type InputMode = 'pdf' | 'text';
 
 export default function ReceiptImport({ onImport, user }: { onImport: () => void; user: User | null }) {
-  const [mode, setMode] = useState<InputMode>('photo');
+  const [mode, setMode] = useState<InputMode>('pdf');
   const [step, setStep] = useState<'input' | 'review'>('input');
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [rawText, setRawText] = useState('');
@@ -23,7 +23,6 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [ocrProgress, setOcrProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processText = useCallback((text: string) => {
@@ -36,28 +35,6 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
     setReviewItems(review);
     setStep('review');
   }, []);
-
-  const handlePhotoUpload = async (file: File) => {
-    setLoading(true);
-    setError('');
-    setOcrProgress(0);
-    try {
-      const Tesseract = (await import('tesseract.js')).default;
-      const result = await Tesseract.recognize(file, 'eng', {
-        logger: (m: any) => {
-          if (m.status === 'recognizing text') {
-            setOcrProgress(Math.round(m.progress * 100));
-          }
-        },
-      });
-      processText(result.data.text);
-    } catch (err: any) {
-      setError('Failed to read image. Please try a clearer photo.');
-    } finally {
-      setLoading(false);
-      setOcrProgress(0);
-    }
-  };
 
   const handlePdfUpload = async (file: File) => {
     setLoading(true);
@@ -84,8 +61,7 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (mode === 'photo') handlePhotoUpload(file);
-    else if (mode === 'pdf') handlePdfUpload(file);
+    if (mode === 'pdf') handlePdfUpload(file);
   };
 
   const handleTextSubmit = () => {
@@ -253,7 +229,7 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
       )}
 
       <div className="flex gap-2 mb-6">
-        {(['photo', 'pdf', 'text'] as InputMode[]).map(m => (
+        {(['pdf', 'text'] as InputMode[]).map(m => (
           <button
             key={m}
             onClick={() => { setMode(m); setError(''); }}
@@ -261,12 +237,12 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
               mode === m ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            {m === 'photo' ? '📷 Photo' : m === 'pdf' ? '📄 PDF' : '📝 Paste Text'}
+            {m === 'pdf' ? '📄 PDF' : '📝 Paste Text'}
           </button>
         ))}
       </div>
 
-      {(mode === 'photo' || mode === 'pdf') && (
+      {mode === 'pdf' && (
         <div>
           <div
             onClick={() => fileInputRef.current?.click()}
@@ -274,33 +250,24 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
           >
             {loading ? (
               <div>
-                <div className="text-gray-600 mb-2">
-                  {mode === 'photo' ? `Reading receipt... ${ocrProgress}%` : 'Extracting text from PDF...'}
-                </div>
+                <div className="text-gray-600 mb-2">Extracting text from PDF...</div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all"
-                    style={{ width: `${mode === 'photo' ? ocrProgress : 60}%` }}
-                  />
+                  <div className="bg-blue-600 h-2 rounded-full transition-all animate-pulse" style={{ width: '60%' }} />
                 </div>
               </div>
             ) : (
               <>
-                <p className="text-4xl mb-2">{mode === 'photo' ? '📷' : '📄'}</p>
-                <p className="text-gray-600 font-medium">
-                  {mode === 'photo' ? 'Upload receipt photo' : 'Upload receipt PDF'}
-                </p>
+                <p className="text-4xl mb-2"></p>
+                <p className="text-gray-600 font-medium">Upload receipt PDF</p>
                 <p className="text-gray-400 text-sm mt-1">Click to browse or drag & drop</p>
-                {mode === 'photo' && (
-                  <p className="text-xs text-gray-400 mt-2">Works best with clear, well-lit photos. Supports Aldi, Tesco, Sainsbury&apos;s, etc.</p>
-                )}
+                <p className="text-xs text-gray-400 mt-2">Download PDF from Tesco/Aldi app or email</p>
               </>
             )}
           </div>
           <input
             ref={fileInputRef}
             type="file"
-            accept={mode === 'photo' ? 'image/*' : 'application/pdf'}
+            accept="application/pdf"
             onChange={handleFileChange}
             className="hidden"
           />
