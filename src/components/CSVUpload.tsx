@@ -1,18 +1,18 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import Papa from 'papaparse';
-import { supabase } from '@/lib/supabase';
-import type { User } from '@supabase/supabase-js';
-import type { CSVIngredient } from '@/types';
+import { parseCSV, csvToIngredientInserts } from '@/services/csvImport';
+import { insertIngredients } from '@/services/ingredients';
+import { usePantry } from '@/context/PantryContext';
 
-export default function CSVUpload({ onUpload, user }: { onUpload: () => void; user: User | null }) {
+export default function CSVUpload() {
+  const { user, refresh } = usePantry();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -20,56 +20,19 @@ export default function CSVUpload({ onUpload, user }: { onUpload: () => void; us
     setError('');
     setSuccess('');
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        try {
-          const ingredients = results.data as any[];
-          
-          // Validate and transform data
-          const validIngredients = ingredients
-            .filter((item) => item.name && item.expiration_date)
-            .map((item) => ({
-              user_id: user?.id,
-              name: item.name,
-              quantity: parseFloat(item.quantity) || 1,
-              unit: item.unit || 'pcs',
-              expiration_date: item.expiration_date,
-              calories_per_100g: item.calories_per_100g ? parseFloat(item.calories_per_100g) : null,
-              protein_per_100g: item.protein_per_100g ? parseFloat(item.protein_per_100g) : null,
-              carbs_per_100g: item.carbs_per_100g ? parseFloat(item.carbs_per_100g) : null,
-              fat_per_100g: item.fat_per_100g ? parseFloat(item.fat_per_100g) : null,
-              fibre_per_100g: item.fibre_per_100g ? parseFloat(item.fibre_per_100g) : null,
-            }));
-
-          if (validIngredients.length === 0) {
-            throw new Error('No valid ingredients found in CSV');
-          }
-
-          // Insert into Supabase
-          const { error } = await supabase.from('ingredients').insert(validIngredients);
-
-          if (error) throw error;
-
-          setSuccess(`Successfully imported ${validIngredients.length} ingredients`);
-          onUpload();
-          
-          // Reset file input
-          if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-          }
-        } catch (error: any) {
-          setError(error.message || 'Failed to import CSV');
-        } finally {
-          setLoading(false);
-        }
-      },
-      error: (error) => {
-        setError(error.message);
-        setLoading(false);
-      },
-    });
+    try {
+      const rows = await parseCSV(file);
+      const inserts = csvToIngredientInserts(rows, user?.id);
+      if (inserts.length === 0) throw new Error('No valid ingredients found in CSV');
+      await insertIngredients(inserts);
+      setSuccess(`Successfully imported ${inserts.length} ingredients`);
+      await refresh();
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to import CSV');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

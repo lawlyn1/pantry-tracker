@@ -53,12 +53,18 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 9);
 }
 
+// Pre-compiled keyword regex - O(1) match instead of O(K) iteration per call.
+const CATEGORY_REGEX = new RegExp(`(${Object.keys(CATEGORY_MAP).join('|')})`, 'i');
+const categoryCache = new Map<string, string>();
+
 function detectCategory(name: string): string {
   const lower = name.toLowerCase();
-  for (const [keyword, category] of Object.entries(CATEGORY_MAP)) {
-    if (lower.includes(keyword)) return category;
-  }
-  return 'Other';
+  const cached = categoryCache.get(lower);
+  if (cached) return cached;
+  const match = lower.match(CATEGORY_REGEX);
+  const result = match ? CATEGORY_MAP[match[1].toLowerCase()] ?? 'Other' : 'Other';
+  categoryCache.set(lower, result);
+  return result;
 }
 
 function normalisePrice(priceStr: string): number {

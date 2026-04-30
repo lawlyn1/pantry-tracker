@@ -1,97 +1,58 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Image from 'next/image';
-import { searchRecipesByIngredients, getRecipeInformation } from '@/lib/spoonacular';
-import type { Recipe, MacroTargets, Ingredient } from '@/types';
+import { searchRecipesByIngredients, getRecipeInformation, matchesMacros } from '@/lib/spoonacular';
+import { usePantry } from '@/context/PantryContext';
+import type { Recipe, MacroTargets } from '@/types';
 
-export default function RecipeSuggestions({ ingredients }: { ingredients: Ingredient[] }) {
+export default function RecipeSuggestions() {
+  const { ingredients } = usePantry();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [showMacroInput, setShowMacroInput] = useState(false);
   const [macroTargets, setMacroTargets] = useState<MacroTargets>({
-    calories: 500,
-    protein: 30,
-    carbs: 50,
-    fat: 20,
+    calories: 500, protein: 30, carbs: 50, fat: 20,
   });
 
-  const ingredientNames = ingredients.map((i) => i.name);
+  // Memoized: avoids re-allocating the names array on unrelated state updates.
+  const ingredientNames = useMemo(() => ingredients.map(i => i.name), [ingredients]);
 
-  const handleSearch = async () => {
-    if (ingredientNames.length === 0) {
-      setError('Add ingredients to your pantry first');
-      return;
-    }
-
+  const handleSearch = useCallback(async () => {
+    if (ingredientNames.length === 0) return setError('Add ingredients to your pantry first');
     setLoading(true);
     setError('');
     setSelectedRecipe(null);
-
     try {
-      const results = await searchRecipesByIngredients(ingredientNames);
-      setRecipes(results);
-    } catch (error: any) {
-      setError(error.message || 'Failed to fetch recipes');
+      setRecipes(await searchRecipesByIngredients(ingredientNames));
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to fetch recipes');
     } finally {
       setLoading(false);
     }
-  };
+  }, [ingredientNames]);
 
-  const handleSearchByMacros = async () => {
-    if (ingredientNames.length === 0) {
-      setError('Add ingredients to your pantry first');
-      return;
-    }
-
+  const handleSearchByMacros = useCallback(async () => {
+    if (ingredientNames.length === 0) return setError('Add ingredients to your pantry first');
     setLoading(true);
     setError('');
     setSelectedRecipe(null);
-
     try {
-      // For now, we'll search by ingredients first, then filter by macros
-      const allRecipes = await searchRecipesByIngredients(ingredientNames);
-      
-      // Get detailed nutrition for each recipe
-      const recipesWithNutrition = await Promise.all(
-        allRecipes.slice(0, 10).map(async (recipe) => {
-          try {
-            return await getRecipeInformation(recipe.id);
-          } catch {
-            return recipe;
-          }
-        })
+      const base = await searchRecipesByIngredients(ingredientNames);
+      const detailed = await Promise.all(
+        base.slice(0, 10).map(r => getRecipeInformation(r.id).catch(() => r)),
       );
-
-      // Filter by macro targets (with 30% tolerance)
-      const tolerance = 0.3;
-      const filteredRecipes = recipesWithNutrition.filter((recipe) => {
-        if (!recipe.nutrition) return false;
-        
-        const caloriesMatch =
-          Math.abs(recipe.nutrition.calories - macroTargets.calories) / macroTargets.calories <=
-          tolerance;
-        const proteinMatch =
-          Math.abs(recipe.nutrition.protein - macroTargets.protein) / macroTargets.protein <=
-          tolerance;
-        const carbsMatch =
-          Math.abs(recipe.nutrition.carbs - macroTargets.carbs) / macroTargets.carbs <= tolerance;
-        const fatMatch =
-          Math.abs(recipe.nutrition.fat - macroTargets.fat) / macroTargets.fat <= tolerance;
-
-        return caloriesMatch && proteinMatch && carbsMatch && fatMatch;
-      });
-
-      setRecipes(filteredRecipes.length > 0 ? filteredRecipes : recipesWithNutrition);
+      const filtered = detailed.filter(r => matchesMacros(r, macroTargets));
+      setRecipes(filtered.length > 0 ? filtered : detailed);
       setShowMacroInput(false);
-    } catch (error: any) {
-      setError(error.message || 'Failed to fetch recipes');
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to fetch recipes');
     } finally {
       setLoading(false);
     }
-  };
+  }, [ingredientNames, macroTargets]);
 
   const handleRecipeClick = async (recipe: Recipe) => {
     setLoading(true);

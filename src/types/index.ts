@@ -1,5 +1,3 @@
-import type { User } from '@supabase/supabase-js';
-
 export interface Ingredient {
   id: string;
   user_id?: string;
@@ -7,36 +5,20 @@ export interface Ingredient {
   quantity: number;
   unit: string;
   expiration_date: string;
-  calories_per_100g?: number;
-  protein_per_100g?: number;
-  carbs_per_100g?: number;
-  fat_per_100g?: number;
-  fibre_per_100g?: number;
+  calories_per_100g?: number | null;
+  protein_per_100g?: number | null;
+  carbs_per_100g?: number | null;
+  fat_per_100g?: number | null;
+  fibre_per_100g?: number | null;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface SimpleIngredient {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-}
+export type SimpleIngredient = Pick<Ingredient, 'id' | 'name' | 'quantity' | 'unit'>;
 
-export interface CSVIngredient {
-  user_id?: string;
-  name: string;
-  quantity: number;
-  unit: string;
-  expiration_date: string;
-  calories_per_100g: number | null;
-  protein_per_100g: number | null;
-  carbs_per_100g: number | null;
-  fat_per_100g: number | null;
-  fibre_per_100g: number | null;
-}
+export type IngredientInsert = Omit<Ingredient, 'id' | 'created_at' | 'updated_at'>;
 
-export interface FoodLog {
+export interface FoodLogEntry {
   id: string;
   user_id?: string;
   ingredient_id: string | null;
@@ -44,9 +26,11 @@ export interface FoodLog {
   quantity_consumed: number;
   unit: string;
   log_date: string;
-  meal_type: string | null;
+  meal_type: MealType | null;
   created_at?: string;
 }
+
+export type FoodLogInsert = Omit<FoodLogEntry, 'id' | 'created_at'>;
 
 export interface NutritionInfo {
   calories: number;
@@ -79,12 +63,14 @@ export interface MacroTargets {
   fat: number;
 }
 
-export type TabType = 'inventory' | 'recipes' | 'foodlog';
+export type TabType = 'inventory' | 'recipes' | 'foodlog' | 'receipt';
 
 export const UNIT_OPTIONS = [
-  'pcs', 'g', 'kg', 'ml', 'l', 'cups', 'tbsp', 'tsp', 'oz', 'lb'
+  'pcs', 'g', 'kg', 'ml', 'l', 'cups', 'tbsp', 'tsp', 'oz', 'lb',
 ] as const;
+export type Unit = typeof UNIT_OPTIONS[number];
 
-export const MEAL_TYPES = [
-  'breakfast', 'lunch', 'dinner', 'snack'
-] as const;
+export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
+export type MealType = typeof MEAL_TYPES[number];
+
+export type ExpirationStatus = 'expired' | 'expiring-soon' | 'expiring-week' | 'fresh';

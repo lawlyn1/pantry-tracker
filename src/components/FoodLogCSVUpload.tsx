@@ -1,18 +1,22 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import Papa from 'papaparse';
-import { supabase } from '@/lib/supabase';
-import type { User } from '@supabase/supabase-js';
-import type { FoodLog } from '@/types';
+import { parseCSV, csvToFoodLogInserts } from '@/services/csvImport';
+import { insertFoodLogs, applyConsumptionToInventory } from '@/services/foodLogs';
+import { usePantry } from '@/context/PantryContext';
 
-export default function FoodLogCSVUpload({ onUpload, user }: { onUpload: () => void; user: User | null }) {
+interface Props {
+  onComplete?: () => void;
+}
+
+export default function FoodLogCSVUpload({ onComplete }: Props) {
+  const { user, refresh } = usePantry();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -20,75 +24,25 @@ export default function FoodLogCSVUpload({ onUpload, user }: { onUpload: () => v
     setError('');
     setSuccess('');
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        try {
-          const foodLogs = results.data as any[];
-          
-          // Validate and transform data - MacroFactor food log format
-          const validLogs: Partial<FoodLog>[] = foodLogs
-            .filter((item) => item.name && item.date && item.quantity)
-            .map((item) => ({
-              user_id: user?.id,
-              ingredient_name: item.name,
-              quantity_consumed: parseFloat(item.quantity) || 1,
-              unit: item.unit || 'g',
-              log_date: item.date,
-              meal_type: item.meal_type || null,
-            }));
+    try {
+      const rows = await parseCSV(file);
+      const logs = csvToFoodLogInserts(rows, user?.id);
+      if (logs.length === 0) throw new Error('No valid food logs found in CSV');
 
-          if (validLogs.length === 0) {
-            throw new Error('No valid food logs found in CSV');
-          }
+      // Two-phase: insert all logs in a single batch, then resolve inventory deltas
+      // via a single SELECT IN + parallel updates (replaces N+1 loop).
+      await insertFoodLogs(logs);
+      await applyConsumptionToInventory(logs);
 
-          // Insert food logs
-          const { error } = await supabase.from('food_logs').insert(validLogs);
-
-          if (error) throw error;
-
-          // Auto-remove from inventory based on food logs
-          for (const log of validLogs) {
-            if (log.ingredient_name && log.quantity_consumed) {
-              // Find matching ingredient by name
-              const { data: ingredients } = await supabase
-                .from('ingredients')
-                .select('id, quantity')
-                .ilike('name', `%${log.ingredient_name}%`)
-                .limit(1);
-
-              if (ingredients && ingredients.length > 0) {
-                const ingredient = ingredients[0];
-                // Convert units if needed (simplified - assumes same unit)
-                const newQuantity = Math.max(0, ingredient.quantity - log.quantity_consumed);
-                
-                await supabase
-                  .from('ingredients')
-                  .update({ quantity: newQuantity })
-                  .eq('id', ingredient.id);
-              }
-            }
-          }
-
-          setSuccess(`Successfully imported ${validLogs.length} food logs and updated inventory`);
-          onUpload();
-          
-          // Reset file input
-          if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-          }
-        } catch (error: any) {
-          setError(error.message || 'Failed to import CSV');
-        } finally {
-          setLoading(false);
-        }
-      },
-      error: (error) => {
-        setError(error.message);
-        setLoading(false);
-      },
-    });
+      setSuccess(`Successfully imported ${logs.length} food logs and updated inventory`);
+      await refresh();
+      onComplete?.();
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to import CSV');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

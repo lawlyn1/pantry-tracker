@@ -95,19 +95,24 @@ const SHELF_LIFE_MAP: Record<string, ShelfLife> = {
 
 const DEFAULT_SHELF_LIFE: ShelfLife = { days: 7, unit: 'days', label: 'Unknown item' };
 
+// Pre-compile keywords once for O(1) regex match instead of O(K) Object.entries scan per call.
+const SHELF_KEYWORDS = Object.keys(SHELF_LIFE_MAP);
+const SHELF_REGEX = new RegExp(`(${SHELF_KEYWORDS.join('|')})`, 'i');
+const cache = new Map<string, ShelfLife>();
+
 export function estimateShelfLife(itemName: string): ShelfLife {
-  const lower = itemName.toLowerCase();
-  for (const [keyword, shelfLife] of Object.entries(SHELF_LIFE_MAP)) {
-    if (lower.includes(keyword)) {
-      return shelfLife;
-    }
-  }
-  return DEFAULT_SHELF_LIFE;
+  const key = itemName.toLowerCase();
+  const cached = cache.get(key);
+  if (cached) return cached;
+  const match = key.match(SHELF_REGEX);
+  const result = match ? SHELF_LIFE_MAP[match[1].toLowerCase()] ?? DEFAULT_SHELF_LIFE : DEFAULT_SHELF_LIFE;
+  cache.set(key, result);
+  return result;
 }
 
 export function estimateExpiryDate(itemName: string, purchaseDate = new Date()): string {
   const { days } = estimateShelfLife(itemName);
   const expiry = new Date(purchaseDate);
   expiry.setDate(expiry.getDate() + days);
-  return expiry.toISOString().split('T')[0];
+  return expiry.toISOString().slice(0, 10);
 }

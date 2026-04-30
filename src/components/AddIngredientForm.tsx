@@ -1,54 +1,49 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import { getIngredientNutrition } from '@/lib/spoonacular';
-import type { User } from '@supabase/supabase-js';
-import type { Ingredient, NutritionInfo } from '@/types';
+import { insertIngredients } from '@/services/ingredients';
+import { usePantry } from '@/context/PantryContext';
 import { UNIT_OPTIONS } from '@/types';
 
-export default function AddIngredientForm({ onIngredientAdded, user }: { onIngredientAdded: () => void; user: User | null }) {
-  const [formData, setFormData] = useState({
-    name: '',
-    quantity: 1,
-    unit: 'pcs',
-    expiration_date: '',
-    calories_per_100g: '',
-    protein_per_100g: '',
-    carbs_per_100g: '',
-    fat_per_100g: '',
-    fibre_per_100g: '',
-  });
+const EMPTY_FORM = {
+  name: '',
+  quantity: 1,
+  unit: 'pcs',
+  expiration_date: '',
+  calories_per_100g: '',
+  protein_per_100g: '',
+  carbs_per_100g: '',
+  fat_per_100g: '',
+  fibre_per_100g: '',
+};
+
+const numOrNull = (v: string): number | null => (v === '' ? null : parseFloat(v));
+
+export default function AddIngredientForm() {
+  const { user, refresh } = usePantry();
+  const [formData, setFormData] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fetchingNutrition, setFetchingNutrition] = useState(false);
 
   const handleAutoFetchNutrition = async () => {
-    if (!formData.name) {
-      setError('Please enter an ingredient name first');
-      return;
-    }
-
+    if (!formData.name) return setError('Please enter an ingredient name first');
     setFetchingNutrition(true);
     setError('');
-
     try {
-      const nutrition = await getIngredientNutrition(formData.name);
-      
-      if (nutrition) {
-        setFormData({
-          ...formData,
-          calories_per_100g: nutrition.calories.toString(),
-          protein_per_100g: nutrition.protein.toString(),
-          carbs_per_100g: nutrition.carbs.toString(),
-          fat_per_100g: nutrition.fat.toString(),
-          fibre_per_100g: nutrition.fibre.toString(),
-        });
-      } else {
-        setError('Could not find nutrition data for this ingredient');
-      }
-    } catch (error: any) {
-      setError(error.message || 'Failed to fetch nutrition data');
+      const n = await getIngredientNutrition(formData.name);
+      if (!n) return setError('Could not find nutrition data for this ingredient');
+      setFormData(prev => ({
+        ...prev,
+        calories_per_100g: String(n.calories),
+        protein_per_100g:  String(n.protein),
+        carbs_per_100g:    String(n.carbs),
+        fat_per_100g:      String(n.fat),
+        fibre_per_100g:    String(n.fibre),
+      }));
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to fetch nutrition data');
     } finally {
       setFetchingNutrition(false);
     }
@@ -58,39 +53,23 @@ export default function AddIngredientForm({ onIngredientAdded, user }: { onIngre
     e.preventDefault();
     setLoading(true);
     setError('');
-
     try {
-      const { error } = await supabase.from('ingredients').insert([
-        {
-          user_id: user?.id,
-          name: formData.name,
-          quantity: parseFloat(formData.quantity.toString()),
-          unit: formData.unit,
-          expiration_date: formData.expiration_date,
-          calories_per_100g: formData.calories_per_100g ? parseFloat(formData.calories_per_100g) : null,
-          protein_per_100g: formData.protein_per_100g ? parseFloat(formData.protein_per_100g) : null,
-          carbs_per_100g: formData.carbs_per_100g ? parseFloat(formData.carbs_per_100g) : null,
-          fat_per_100g: formData.fat_per_100g ? parseFloat(formData.fat_per_100g) : null,
-          fibre_per_100g: formData.fibre_per_100g ? parseFloat(formData.fibre_per_100g) : null,
-        },
-      ]);
-
-      if (error) throw error;
-
-      setFormData({
-        name: '',
-        quantity: 1,
-        unit: 'pcs',
-        expiration_date: '',
-        calories_per_100g: '',
-        protein_per_100g: '',
-        carbs_per_100g: '',
-        fat_per_100g: '',
-        fibre_per_100g: '',
-      });
-      onIngredientAdded();
-    } catch (error: any) {
-      setError(error.message || 'Failed to add ingredient');
+      await insertIngredients([{
+        user_id: user?.id,
+        name: formData.name,
+        quantity: Number(formData.quantity) || 0,
+        unit: formData.unit,
+        expiration_date: formData.expiration_date,
+        calories_per_100g: numOrNull(formData.calories_per_100g),
+        protein_per_100g:  numOrNull(formData.protein_per_100g),
+        carbs_per_100g:    numOrNull(formData.carbs_per_100g),
+        fat_per_100g:      numOrNull(formData.fat_per_100g),
+        fibre_per_100g:    numOrNull(formData.fibre_per_100g),
+      }]);
+      setFormData(EMPTY_FORM);
+      await refresh();
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to add ingredient');
     } finally {
       setLoading(false);
     }

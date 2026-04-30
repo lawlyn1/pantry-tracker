@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
 import { parseReceiptText, ParsedReceiptItem } from '@/lib/receiptParser';
 import { estimateExpiryDate, estimateShelfLife } from '@/lib/shelfLife';
-import type { User } from '@supabase/supabase-js';
-import { UNIT_OPTIONS } from '@/types';
+import { insertIngredients } from '@/services/ingredients';
+import { usePantry } from '@/context/PantryContext';
 
 interface ReviewItem extends ParsedReceiptItem {
   expiration_date: string;
@@ -14,7 +13,8 @@ interface ReviewItem extends ParsedReceiptItem {
 
 type InputMode = 'pdf' | 'text';
 
-export default function ReceiptImport({ onImport, user }: { onImport: () => void; user: User | null }) {
+export default function ReceiptImport() {
+  const { user, refresh } = usePantry();
   const [mode, setMode] = useState<InputMode>('pdf');
   const [step, setStep] = useState<'input' | 'review'>('input');
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
@@ -108,13 +108,12 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
         unit: item.category === 'Other' ? 'pcs' : item.category.toLowerCase(),
         expiration_date: item.expiration_date,
       }));
-      const { error } = await supabase.from('ingredients').insert(rows);
-      if (error) throw error;
+      await insertIngredients(rows);
       setSuccess(`Added ${toSave.length} items to your pantry!`);
       setStep('input');
       setReviewItems([]);
       setRawText('');
-      onImport();
+      await refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to save items');
     } finally {
