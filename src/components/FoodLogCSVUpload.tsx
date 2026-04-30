@@ -3,8 +3,9 @@
 import { useState, useRef } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '@/lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
-export default function FoodLogCSVUpload({ onUpload }: { onUpload: () => void }) {
+export default function FoodLogCSVUpload({ onUpload, user }: { onUpload: () => void; user: User | null }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -29,6 +30,7 @@ export default function FoodLogCSVUpload({ onUpload }: { onUpload: () => void })
           const validLogs = foodLogs
             .filter((item) => item.name && item.date && item.quantity)
             .map((item) => ({
+              user_id: user?.id,
               ingredient_name: item.name,
               quantity_consumed: parseFloat(item.quantity) || 1,
               unit: item.unit || 'g',

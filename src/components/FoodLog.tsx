@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import FoodLogCSVUpload from '@/components/FoodLogCSVUpload';
+import type { User } from '@supabase/supabase-js';
 
 interface FoodLog {
   id: string;
@@ -21,7 +22,7 @@ interface Ingredient {
   unit: string;
 }
 
-export default function FoodLog({ onConsumption }: { onConsumption: () => void }) {
+export default function FoodLog({ onConsumption, user }: { onConsumption: () => void; user: User | null }) {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [selectedIngredient, setSelectedIngredient] = useState('');
@@ -74,6 +75,7 @@ export default function FoodLog({ onConsumption }: { onConsumption: () => void }
       // Log the food consumption
       const { error: logError } = await supabase.from('food_logs').insert([
         {
+          user_id: user?.id,
           ingredient_id: selectedIngredient,
           ingredient_name: ingredient.name,
           quantity_consumed: quantity,
@@ -234,7 +236,7 @@ export default function FoodLog({ onConsumption }: { onConsumption: () => void }
       </div>
 
       <div>
-        <FoodLogCSVUpload onUpload={() => { fetchIngredients(); fetchRecentLogs(); onConsumption(); }} />
+        <FoodLogCSVUpload onUpload={() => { fetchIngredients(); fetchRecentLogs(); onConsumption(); }} user={user} />
       </div>
     </div>
   );

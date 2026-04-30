@@ -5,6 +5,7 @@
 ```sql
 CREATE TABLE ingredients (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   quantity NUMERIC NOT NULL DEFAULT 1,
   unit TEXT NOT NULL DEFAULT 'pcs',
@@ -21,11 +22,23 @@ CREATE TABLE ingredients (
 -- Enable RLS
 ALTER TABLE ingredients ENABLE ROW LEVEL SECURITY;
 
--- Create policy to allow all operations (adjust as needed for production)
-CREATE POLICY "Allow all operations on ingredients" ON ingredients
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);
+-- Create user-specific policies
+CREATE POLICY "Users can view their own ingredients" ON ingredients
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own ingredients" ON ingredients
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own ingredients" ON ingredients
+  FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own ingredients" ON ingredients
+  FOR DELETE
+  USING (auth.uid() = user_id);
 
 -- Create index on expiration date for easy querying of expiring items
 CREATE INDEX idx_ingredients_expiration_date ON ingredients(expiration_date);
@@ -39,6 +52,7 @@ CREATE INDEX idx_ingredients_name ON ingredients(name);
 ```sql
 CREATE TABLE food_logs (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   ingredient_id UUID REFERENCES ingredients(id) ON DELETE CASCADE,
   ingredient_name TEXT NOT NULL,
   quantity_consumed NUMERIC NOT NULL,
@@ -51,11 +65,18 @@ CREATE TABLE food_logs (
 -- Enable RLS
 ALTER TABLE food_logs ENABLE ROW LEVEL SECURITY;
 
--- Create policy to allow all operations on food logs
-CREATE POLICY "Allow all operations on food_logs" ON food_logs
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);
+-- Create user-specific policies
+CREATE POLICY "Users can view their own food logs" ON food_logs
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own food logs" ON food_logs
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own food logs" ON food_logs
+  FOR DELETE
+  USING (auth.uid() = user_id);
 
 -- Create index on log date for querying recent logs
 CREATE INDEX idx_food_logs_log_date ON food_logs(log_date);

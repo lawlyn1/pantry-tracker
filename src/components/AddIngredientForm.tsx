@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getIngredientNutrition } from '@/lib/spoonacular';
+import type { User } from '@supabase/supabase-js';
 
-export default function AddIngredientForm({ onIngredientAdded }: { onIngredientAdded: () => void }) {
+export default function AddIngredientForm({ onIngredientAdded, user }: { onIngredientAdded: () => void; user: User | null }) {
   const [formData, setFormData] = useState({
     name: '',
     quantity: 1,
@@ -59,6 +60,7 @@ export default function AddIngredientForm({ onIngredientAdded }: { onIngredientA
     try {
       const { error } = await supabase.from('ingredients').insert([
         {
+          user_id: user?.id,
           name: formData.name,
           quantity: parseFloat(formData.quantity.toString()),
           unit: formData.unit,
