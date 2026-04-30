@@ -40,26 +40,26 @@ export default function ReceiptImport({ onImport, user }: { onImport: () => void
     setLoading(true);
     setError('');
     try {
-      const pdfjsLib = await import('pdfjs-dist');
-      // Set worker source for browser
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
-      
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      let fullText = '';
-      
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        const pageText = content.items.map((item: any) => item.str).join(' ');
-        fullText += pageText + '\n';
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/parse-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to parse PDF');
       }
+
+      const data = await response.json();
       
-      if (fullText.trim().length === 0) {
+      if (!data.text || data.text.trim().length === 0) {
         throw new Error('No text found in PDF');
       }
       
-      processText(fullText);
+      processText(data.text);
     } catch (err: any) {
       console.error('PDF error:', err);
       setError(err?.message || 'Failed to read PDF. Please try a different file or paste the text directly.');
